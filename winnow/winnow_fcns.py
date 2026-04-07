@@ -246,8 +246,13 @@ class Winnow:
         block_size = (1 << self._syndrome_length) - 1
 
         # [CHECK LOGIC]
+        # self._parity_check_matrix = [
+        #     [(j // (1 << i)) & 0x1 for j in range(1, block_size + 1)]
+        #     for i in range(self._syndrome_length)
+        # ]
+        # We use self._block_size directly to ensure the matrix is wide enough
         self._parity_check_matrix = [
-            [(j // (1 << i)) & 0x1 for j in range(1, block_size + 1)]
+            [(j // (1 << i)) & 0x1 for j in range(1, self._block_size + 1)]
             for i in range(self._syndrome_length)
         ]
 
