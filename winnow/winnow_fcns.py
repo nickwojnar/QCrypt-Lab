@@ -24,6 +24,7 @@ class Winnow:
         self._block_size = None
         self._num_of_blocks = None
         self._parity_check_matrix = None
+        self._block_size_schedule = #idk what this should be
 
     def first_pass(self, permute_bits: bool = False) -> int:
         """
