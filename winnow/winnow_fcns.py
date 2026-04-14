@@ -202,7 +202,9 @@ class Winnow:
 
             # [CHECK LOGIC]
             for j in range(self._block_size):
-                temp ^= self._parity_check_matrix[i][j] & self._key_string.get_bit(base_index + j)
+                # print(f"parity check matrix {self._parity_check_matrix[i][j]} of type {type(self._parity_check_matrix[i][j])}")
+                # print(f"parity check matrix {self._key_string.get_bit(base_index + j)} of type {type(self._key_string.get_bit(base_index + j))}")
+                temp ^= self._parity_check_matrix[i][j] & int(self._key_string.get_bit(base_index + j))
 
             new_syndrome += temp
 
