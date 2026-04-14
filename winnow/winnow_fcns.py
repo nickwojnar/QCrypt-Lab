@@ -24,7 +24,7 @@ class Winnow:
         self._block_size = None
         self._num_of_blocks = None
         self._parity_check_matrix = None
-        self._block_size_schedule = #idk what this should be
+        self._block_size_schedule = [2, 1, 1, 0, 0, 0, 0, 0]
 
     def first_pass(self, permute_bits: bool = False) -> int:
         """
@@ -342,4 +342,15 @@ class Winnow:
         else:
             # [CHECK LOGIC]
             self._key_string.flip_bit(block_number * self._block_size + (syndrome - 1))
+    def permute_buffer(self):
+        """
+        Shuffles the bits based on the seed. 
+        Alice and Bob use the same seed to ensure identical shuffles.
+        """
+        if self.seed is None:
+            raise ValueError("Seed must be set before permutation!")
+        
+        # We use a local generator so we don't mess up other random streams
+        rng = np.random.default_rng(self.seed)
+        rng.shuffle(self.bits)
 
