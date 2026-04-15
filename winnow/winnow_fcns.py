@@ -332,16 +332,32 @@ class Winnow:
             block_number: The block containing the error
             syndrome: Alice's syndrome for that block
         """
-        my_syndrome = self.get_syndrome(block_number)
+        my_syndrome = self.get_raw_syndrome(block_number)
 
-        syndrome ^= my_syndrome
+        diff = syndrome ^ my_syndrome
 
-        if syndrome == 0:
-            # The error was discarded in the parity cleanup
-            pass
-        else:
-            # [CHECK LOGIC]
-            self._key_string.flip_bit(block_number * self._block_size + (syndrome - 1))
+        if diff != 0:
+            # find which column of H matches the syndrome difference
+            error_pos = None
+            for j in range(self._block_size):
+                col = 0
+                for i in range(self._syndrome_length):
+                    col |= (self._parity_check_matrix[i][j] << i)  # row 0 = LSB, matches get_syndrome
+                if col == diff:
+                    error_pos = j
+                    break
+            
+            if error_pos is not None:
+                self._key_string.flip_bit(block_number * self._block_size + error_pos)
+
+        # syndrome ^= my_syndrome
+
+        # if syndrome == 0:
+        #     # The error was discarded in the parity cleanup
+        #     pass
+        # else:
+        #     # [CHECK LOGIC]
+        #     self._key_string.flip_bit(block_number * self._block_size + (syndrome - 1))
     def permute_buffer(self):
         """
         Shuffles the bits based on the seed. 
@@ -353,4 +369,43 @@ class Winnow:
         # We use a local generator so we don't mess up other random streams
         rng = np.random.default_rng(self.seed)
         rng.shuffle(self.bits)
+    
+    def get_raw_syndrome(self, block_number: int) -> int:
+        """
+        Calculate the syndrome for ONLY BOB block number. (no public communication, no bitloss)
+        
+        Args:
+            block_number: The block number for which to calculate the syndrome
+            
+        Returns:
+            The syndrome 
+            
+        Raises:
+            ValueError: If the block number is out of range
+        """
+
+        if block_number >= self._num_of_blocks:
+            raise ValueError(f"Illegal block number: {block_number}")
+
+        new_syndrome = 0
+        base_index = block_number * self._block_size
+
+        for i in range(self._syndrome_length - 1, -1, -1):
+            new_syndrome <<= 1
+            temp = 0
+
+            # [CHECK LOGIC]
+            for j in range(self._block_size):
+                # print(f"parity check matrix {self._parity_check_matrix[i][j]} of type {type(self._parity_check_matrix[i][j])}")
+                # print(f"parity check matrix {self._key_string.get_bit(base_index + j)} of type {type(self._key_string.get_bit(base_index + j))}")
+                temp ^= self._parity_check_matrix[i][j] & int(self._key_string.get_bit(base_index + j))
+
+            new_syndrome += temp
+
+        # self._bits_exposed += self._syndrome_length
+        # self._net_bits_exposed += self._syndrome_length
+
+        return new_syndrome
+
+
 
