@@ -25,7 +25,7 @@ class Winnow:
         self._block_size = None
         self._num_of_blocks = None
         self._parity_check_matrix = None
-        self._block_size_schedule = [1, 1, 1, 0, 0, 0, 0, 0]
+        self._block_size_schedule = [4, 4, 0, 0, 0, 0, 0, 0]
 
     # def first_pass(self, permute_bits: bool = False) -> int:
     #     """
@@ -77,6 +77,14 @@ class Winnow:
         Returns:
             0 on success, -1 if the schedule is exhausted
         """
+        # for i in range(8):
+        #     if self._block_size_schedule[i] > 0:
+        #         # Shift the index or cap the max size
+        #         # If the QBER is stuck at 10%, don't go above syndrome_length 3 (block size 8)
+        #         self._syndrome_length = min(i + 2, 3) 
+        #         self._block_size = 1 << self._syndrome_length
+        #         self._block_size_schedule[i] -= 1
+        #         break
         for i in range(8):
             if self._block_size_schedule[i] > 0:
                 self._syndrome_length = i + 3
