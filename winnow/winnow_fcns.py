@@ -18,6 +18,7 @@ class Winnow:
         self._bits_exposed = 0
         self._net_bits_exposed = 0
         self._setter_locked = False
+        self._pass_number = 0
 
         # Instance variables initialized in first_pass
         self._syndrome_length = None
@@ -49,6 +50,7 @@ class Winnow:
 
         if permute_bits:
             self._key_string.permute_buffer()
+        self._pass_number+=1
 
         return 0
     
@@ -70,18 +72,38 @@ class Winnow:
                 self._block_size_schedule[i] -= 1
                 break
             elif i >= 7:
-                # Reached end of schedule with no block choices left
                 print("Time to terminate.")
                 return -1
 
         self._num_of_blocks = self._key_string.get_length() // self._block_size
-
         self.create_matrix()
+        self._pass_number += 1
 
         if permute_bits:
+            self._key_string.set_seed(self.get_seed_value() + self._pass_number)
             self._key_string.permute_buffer()
 
         return 0
+        # for i in range(8):
+        #     if self._block_size_schedule[i] > 0:
+        #         self._syndrome_length = i + 3
+        #         self._block_size = 1 << self._syndrome_length
+        #         self._block_size_schedule[i] -= 1
+        #         break
+        #     elif i >= 7:
+        #         # Reached end of schedule with no block choices left
+        #         print("Time to terminate.")
+        #         return -1
+
+        # self._num_of_blocks = self._key_string.get_length() // self._block_size
+
+        # self.create_matrix()
+
+        # if permute_bits:
+        #     self._key_string.permute_buffer()
+        # self._pass_number+=1
+
+        # return 0
     
     #---------------------------------------------------------------------------------------------------
     #-----------------------------------------------reg utils---------------------------------------------
@@ -336,28 +358,28 @@ class Winnow:
 
         diff = syndrome ^ my_syndrome
 
-        if diff != 0:
-            # find which column of H matches the syndrome difference
-            error_pos = None
-            for j in range(self._block_size):
-                col = 0
-                for i in range(self._syndrome_length):
-                    col |= (self._parity_check_matrix[i][j] << i)  # row 0 = LSB, matches get_syndrome
-                if col == diff:
-                    error_pos = j
-                    break
+        # if diff != 0:
+        #     # find which column of H matches the syndrome difference
+        #     error_pos = None
+        #     for j in range(self._block_size):
+        #         col = 0
+        #         for i in range(self._syndrome_length):
+        #             col |= (self._parity_check_matrix[i][j] << i)  # row 0 = LSB, matches get_syndrome
+        #         if col == diff:
+        #             error_pos = j
+        #             break
             
-            if error_pos is not None:
-                self._key_string.flip_bit(block_number * self._block_size + error_pos)
+        #     if error_pos is not None:
+        #         self._key_string.flip_bit(block_number * self._block_size + error_pos)
 
         # syndrome ^= my_syndrome
 
-        # if syndrome == 0:
-        #     # The error was discarded in the parity cleanup
-        #     pass
-        # else:
-        #     # [CHECK LOGIC]
-        #     self._key_string.flip_bit(block_number * self._block_size + (syndrome - 1))
+        if diff == 0:
+            # The error was discarded in the parity cleanup
+            pass
+        else:
+            # [CHECK LOGIC]
+            self._key_string.flip_bit(block_number * self._block_size + (syndrome - 1))
     def permute_buffer(self):
         """
         Shuffles the bits based on the seed. 
