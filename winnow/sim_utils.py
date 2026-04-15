@@ -55,6 +55,9 @@ class MockBitBuffer:
             block_end   = block_start + block_size - 1  # exclude last bit
             kept.extend(self.bits[block_start:block_end])
         self.bits = kept
+    def set_length(self, new_length):
+        """Truncates the bit list to the specified length."""
+        self.bits = self.bits[:new_length]
 
 # def simulate_error(key, rng, ber=0.25, N=10):
 #     mask = (rng.random(size=N) < ber).astype(int)
@@ -76,3 +79,4 @@ def simulate_error(key_buffer, rng, ber=0.25):
             key_buffer.flip_bit(i)
     
     return key_buffer # Returns the modified buffer object
+
