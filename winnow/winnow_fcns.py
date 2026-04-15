@@ -219,17 +219,30 @@ class Winnow:
         new_syndrome = 0
         base_index = block_number * self._block_size
 
+    
+
+
         for i in range(self._syndrome_length - 1, -1, -1):
             new_syndrome <<= 1
             temp = 0
 
-            # [CHECK LOGIC]
-            for j in range(self._block_size):
-                # print(f"parity check matrix {self._parity_check_matrix[i][j]} of type {type(self._parity_check_matrix[i][j])}")
-                # print(f"parity check matrix {self._key_string.get_bit(base_index + j)} of type {type(self._key_string.get_bit(base_index + j))}")
-                temp ^= self._parity_check_matrix[i][j] & int(self._key_string.get_bit(base_index + j))
+            # Extract the relevant block of bits as a numpy array
+            block_bits = np.array([self._key_string.get_bit(base_index + j) for j in range(self._block_size)], dtype=int)
 
-            new_syndrome += temp
+            syndrome_bits = (self._parity_check_matrix @ block_bits) % 2
+
+            # Convert the array of bits back into a single integer
+            new_syndrome = 0
+            for bit in reversed(syndrome_bits): # Reverse if you want row 0 at the LSB
+                new_syndrome = (new_syndrome << 1) | int(bit)
+
+            # # [CHECK LOGIC]
+            # for j in range(self._block_size):
+            #     # print(f"parity check matrix {self._parity_check_matrix[i][j]} of type {type(self._parity_check_matrix[i][j])}")
+            #     # print(f"parity check matrix {self._key_string.get_bit(base_index + j)} of type {type(self._key_string.get_bit(base_index + j))}")
+            #     temp ^= self._parity_check_matrix[i][j] & int(self._key_string.get_bit(base_index + j))
+
+            # new_syndrome |= temp
 
         self._bits_exposed += self._syndrome_length
         self._net_bits_exposed += self._syndrome_length
@@ -246,6 +259,7 @@ class Winnow:
         Args:
             parity_list: List to store the parity bits, indexed by block number
         """
+        
         parity_list.set_length(self._num_of_blocks)
 
         for i in range(self._num_of_blocks):

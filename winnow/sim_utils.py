@@ -45,6 +45,8 @@ class MockBitBuffer:
             inverse = np.argsort(indices)
             self.bits = [self.bits[i] for i in inverse]
         self._permutation_history = []  # clear history after inverting
+
+        
     def discard_parity_bits(self, block_size: int, num_blocks: int):
         """Remove the last bit from each block after a Winnow pass."""
         kept = []
