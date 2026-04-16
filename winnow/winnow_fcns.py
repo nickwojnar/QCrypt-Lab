@@ -18,39 +18,54 @@ class Winnow:
         self._bits_exposed = 0
         self._net_bits_exposed = 0
         self._setter_locked = False
+        self._pass_number = 0
 
         # Instance variables initialized in first_pass
         self._syndrome_length = None
         self._block_size = None
         self._num_of_blocks = None
         self._parity_check_matrix = None
+        self._block_size_schedule = [4, 4, 0, 0, 0, 0, 0, 0]
 
+    # def first_pass(self, permute_bits: bool = False) -> int:
+    #     """
+    #     Prepares for the first pass. Initializes the block size schedule,
+    #     determines the initial block size, syndrome length, and number of blocks,
+    #     and generates the parity-check matrix.
+
+    #     Args:
+    #         permute_bits: If True, permutes the bits in the key buffer before the pass.
+
+    #     Returns:
+    #         0 on success
+    #     """
+    #     # For the first pass, always choose a block size of 8
+    #     self._syndrome_length = 3
+    #     self._block_size = 8
+
+    #     # Does not include an incomplete final block
+    #     self._num_of_blocks = self._key_string.get_length() // self._block_size
+
+    #     self.create_matrix()
+
+    #     if permute_bits:
+    #         self._key_string.permute_buffer()
+    #     self._pass_number+=1
+
+    #     return 0
     def first_pass(self, permute_bits: bool = False) -> int:
-        """
-        Prepares for the first pass. Initializes the block size schedule,
-        determines the initial block size, syndrome length, and number of blocks,
-        and generates the parity-check matrix.
-
-        Args:
-            permute_bits: If True, permutes the bits in the key buffer before the pass.
-
-        Returns:
-            0 on success
-        """
-        # For the first pass, always choose a block size of 8
-        self._syndrome_length = 3
-        self._block_size = 8
-
-        # Does not include an incomplete final block
+        # Reduce block size to 4 (syndrome length 2) 
+        # This handles high noise much better than block size 8
+        self._syndrome_length = 2 
+        self._block_size = 4
+        
         self._num_of_blocks = self._key_string.get_length() // self._block_size
-
         self.create_matrix()
 
         if permute_bits:
             self._key_string.permute_buffer()
-
+        self._pass_number += 1
         return 0
-    
     def next_pass(self, permute_bits: bool = False) -> int:
         """
         Prepares for the next pass of Winnow. Adjusts the block size according to
@@ -62,6 +77,14 @@ class Winnow:
         Returns:
             0 on success, -1 if the schedule is exhausted
         """
+        # for i in range(8):
+        #     if self._block_size_schedule[i] > 0:
+        #         # Shift the index or cap the max size
+        #         # If the QBER is stuck at 10%, don't go above syndrome_length 3 (block size 8)
+        #         self._syndrome_length = min(i + 2, 3) 
+        #         self._block_size = 1 << self._syndrome_length
+        #         self._block_size_schedule[i] -= 1
+        #         break
         for i in range(8):
             if self._block_size_schedule[i] > 0:
                 self._syndrome_length = i + 3
@@ -69,18 +92,38 @@ class Winnow:
                 self._block_size_schedule[i] -= 1
                 break
             elif i >= 7:
-                # Reached end of schedule with no block choices left
                 print("Time to terminate.")
                 return -1
 
         self._num_of_blocks = self._key_string.get_length() // self._block_size
-
         self.create_matrix()
+        self._pass_number += 1
 
         if permute_bits:
+            self._key_string.set_seed(self.get_seed_value() + self._pass_number)
             self._key_string.permute_buffer()
 
         return 0
+        # for i in range(8):
+        #     if self._block_size_schedule[i] > 0:
+        #         self._syndrome_length = i + 3
+        #         self._block_size = 1 << self._syndrome_length
+        #         self._block_size_schedule[i] -= 1
+        #         break
+        #     elif i >= 7:
+        #         # Reached end of schedule with no block choices left
+        #         print("Time to terminate.")
+        #         return -1
+
+        # self._num_of_blocks = self._key_string.get_length() // self._block_size
+
+        # self.create_matrix()
+
+        # if permute_bits:
+        #     self._key_string.permute_buffer()
+        # self._pass_number+=1
+
+        # return 0
     
     #---------------------------------------------------------------------------------------------------
     #-----------------------------------------------reg utils---------------------------------------------
@@ -123,6 +166,13 @@ class Winnow:
         result = [self._block_size_schedule[0] + 1]
         result += self._block_size_schedule[1:8]
         return result
+
+    def set_block_size_schedule(self, schedule: list[int]) -> None:
+        """
+        Adds block size schedule inputted by user
+        
+        """
+        self._block_size_schedule = schedule
 
     def set_seed_value(self, seed: int) -> None:
         """
@@ -196,15 +246,30 @@ class Winnow:
         new_syndrome = 0
         base_index = block_number * self._block_size
 
+    
+
+
         for i in range(self._syndrome_length - 1, -1, -1):
             new_syndrome <<= 1
             temp = 0
 
-            # [CHECK LOGIC]
-            for j in range(self._block_size):
-                temp ^= self._parity_check_matrix[i][j] & self._key_string.get_bit(base_index + j)
+            # Extract the relevant block of bits as a numpy array
+            block_bits = np.array([self._key_string.get_bit(base_index + j) for j in range(self._block_size)], dtype=int)
 
-            new_syndrome += temp
+            syndrome_bits = (self._parity_check_matrix @ block_bits) % 2
+
+            # Convert the array of bits back into a single integer
+            new_syndrome = 0
+            for bit in reversed(syndrome_bits): # Reverse if you want row 0 at the LSB
+                new_syndrome = (new_syndrome << 1) | int(bit)
+
+            # # [CHECK LOGIC]
+            # for j in range(self._block_size):
+            #     # print(f"parity check matrix {self._parity_check_matrix[i][j]} of type {type(self._parity_check_matrix[i][j])}")
+            #     # print(f"parity check matrix {self._key_string.get_bit(base_index + j)} of type {type(self._key_string.get_bit(base_index + j))}")
+            #     temp ^= self._parity_check_matrix[i][j] & int(self._key_string.get_bit(base_index + j))
+
+            # new_syndrome |= temp
 
         self._bits_exposed += self._syndrome_length
         self._net_bits_exposed += self._syndrome_length
@@ -221,6 +286,7 @@ class Winnow:
         Args:
             parity_list: List to store the parity bits, indexed by block number
         """
+        
         parity_list.set_length(self._num_of_blocks)
 
         for i in range(self._num_of_blocks):
@@ -319,24 +385,133 @@ class Winnow:
     #----------------------------------------------------------------------------------------------------------
     # ------------------------------------Bob only functions--------------------------------------------------
     #----------------------------------------------------------------------------------------------------------
-    def fix_with_syndrome(self, block_number: int, syndrome: int) -> None:
-        """
-        Used by Bob to correct a single bit error in a block using Alice's syndrome.
-        XORs Alice's syndrome with Bob's own syndrome to find the error location,
-        then flips the erroneous bit.
+    # def fix_with_syndrome(self, block_number: int, syndrome: int) -> None:
+    #     """
+    #     Used by Bob to correct a single bit error in a block using Alice's syndrome.
+    #     XORs Alice's syndrome with Bob's own syndrome to find the error location,
+    #     then flips the erroneous bit.
 
+    #     Args:
+    #         block_number: The block containing the error
+    #         syndrome: Alice's syndrome for that block
+    #     """
+    #     my_syndrome = self.get_raw_syndrome(block_number)
+
+    #     diff = syndrome ^ my_syndrome
+
+    #     # if diff != 0:
+    #     #     # find which column of H matches the syndrome difference
+    #     #     error_pos = None
+    #     #     for j in range(self._block_size):
+    #     #         col = 0
+    #     #         for i in range(self._syndrome_length):
+    #     #             col |= (self._parity_check_matrix[i][j] << i)  # row 0 = LSB, matches get_syndrome
+    #     #         if col == diff:
+    #     #             error_pos = j
+    #     #             break
+            
+    #     #     if error_pos is not None:
+    #     #         self._key_string.flip_bit(block_number * self._block_size + error_pos)
+
+    #     # syndrome ^= my_syndrome
+
+    #     if diff == 0:
+    #         # The error was discarded in the parity cleanup
+    #         pass
+    #     else:
+    #         # [CHECK LOGIC]
+    #         self._key_string.flip_bit(block_number * self._block_size + (syndrome - 1))
+    # def fix_with_syndrome(self, block_number: int, alice_syndrome: int) -> None:
+    #     """
+    #     Used by Bob to correct a single bit error in a block using Alice's syndrome.
+    #     XORs Alice's syndrome with Bob's own syndrome to find the error location,
+    #     then flips the erroneous bit.
+
+    #     Args:
+    #         block_number: The block containing the error
+    #         syndrome: Alice's syndrome for that block
+    #     """
+    #     # 1. Calculate Bob's local syndrome
+    #     bob_syndrome = self.get_raw_syndrome(block_number)  
+
+    #     # 2. XOR them to find the error position
+    #     diff = alice_syndrome ^ bob_syndrome
+
+    #     # 3. If diff is 0, parities match (either 0 or 2+ errors).
+    #     # If diff > 0, it points to the 1-based index of the bit to flip.
+    #     if diff != 0:
+    #         # Subtract 1 because diff is 1-indexed (from the matrix creation j=1)
+    #         error_pos = diff - 1
+            
+    #         # Ensure we don't flip outside the current block
+    #         if error_pos < self._block_size:
+    #             self._key_string.flip_bit(block_number * self._block_size + error_pos)
+    def fix_with_syndrome(self, block_number: int, alice_syndrome: int) -> None:
+        # 1. Get Bob's local syndrome
+        bob_syndrome = self.get_syndrome(block_number)
+
+        # 2. Find the difference
+        diff = alice_syndrome ^ bob_syndrome
+
+        # 3. If diff is 0, no single error detected.
+        # If diff > 0, it is the decimal value of the column in the Hamming matrix.
+        if diff != 0:
+            # Since your matrix columns started at j=1, 
+            # the error position relative to the block start is diff - 1
+            error_pos = diff - 1
+            
+            # Safety check: only flip if the error is within the block boundaries
+            if error_pos < self._block_size:
+                target_idx = (block_number * self._block_size) + error_pos
+                self._key_string.flip_bit(target_idx)
+    def permute_buffer(self):
+        """
+        Shuffles the bits based on the seed. 
+        Alice and Bob use the same seed to ensure identical shuffles.
+        """
+        if self.seed is None:
+            raise ValueError("Seed must be set before permutation!")
+        
+        # We use a local generator so we don't mess up other random streams
+        rng = np.random.default_rng(self.seed)
+        rng.shuffle(self.bits)
+    
+    def get_raw_syndrome(self, block_number: int) -> int:
+        """
+        Calculate the syndrome for ONLY BOB block number. (no public communication, no bitloss)
+        
         Args:
-            block_number: The block containing the error
-            syndrome: Alice's syndrome for that block
+            block_number: The block number for which to calculate the syndrome
+            
+        Returns:
+            The syndrome 
+            
+        Raises:
+            ValueError: If the block number is out of range
         """
-        my_syndrome = self.get_syndrome(block_number)
 
-        syndrome ^= my_syndrome
+        if block_number >= self._num_of_blocks:
+            raise ValueError(f"Illegal block number: {block_number}")
 
-        if syndrome == 0:
-            # The error was discarded in the parity cleanup
-            pass
-        else:
+        new_syndrome = 0
+        base_index = block_number * self._block_size
+
+        for i in range(self._syndrome_length - 1, -1, -1):
+            new_syndrome <<= 1
+            temp = 0
+
             # [CHECK LOGIC]
-            self._key_string.flip_bit(block_number * self._block_size + (syndrome - 1))
+            for j in range(self._block_size):
+                # print(f"parity check matrix {self._parity_check_matrix[i][j]} of type {type(self._parity_check_matrix[i][j])}")
+                # print(f"parity check matrix {self._key_string.get_bit(base_index + j)} of type {type(self._key_string.get_bit(base_index + j))}")
+                temp ^= self._parity_check_matrix[i][j] & int(self._key_string.get_bit(base_index + j))
+
+            new_syndrome += temp
+
+        # self._bits_exposed += self._syndrome_length
+        # self._net_bits_exposed += self._syndrome_length
+
+        return new_syndrome
+
+
 
