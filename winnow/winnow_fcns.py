@@ -167,6 +167,13 @@ class Winnow:
         result += self._block_size_schedule[1:8]
         return result
 
+    def set_block_size_schedule(self, schedule: list[int]) -> None:
+        """
+        Adds block size schedule inputted by user
+        
+        """
+        self._block_size_schedule = schedule
+
     def set_seed_value(self, seed: int) -> None:
         """
         Sets the seed used for the random permutation of bits.
