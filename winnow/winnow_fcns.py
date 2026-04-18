@@ -1,31 +1,48 @@
 import numpy as np
 
 class Winnow:
-    def __init__(self, raw_key=None, perm_seed: int = None):
+    def __init__(self, raw_key=None, perm_seed: int = None, rng=None, block_schedule=[8, 8, 16, 32]):
         """
         Initializes the Winnow class.
-
-        Args:
-            raw_key: BitBuffer containing the sifted key. If None, prints a warning.
-            perm_seed: Seed for the random permutation of bits.
         """
-        if raw_key is None or perm_seed is None:
+        # 1. Check for raw_key first
+        if raw_key is None:
             print("Default constructor for Winnow... use other constructor.")
             return
 
+        # 2. Setup the RNG (Fixing the np.random.Random error)
+        if rng is not None:
+            self._rng = rng
+        elif perm_seed is not None:
+            # Correct NumPy way to create a generator from a seed
+            self._rng = np.random.default_rng(perm_seed)
+        else:
+            print("WARNING: Using completely random seed")
+            self._rng = np.random.default_rng()
+
+        # 3. Initialize key and sync the RNG
         self._key_string = raw_key
-        self._key_string.set_seed(perm_seed)
+        
+        # Sync the buffer to use the SAME rng instance as Winnow
+        # We removed the redundant .set_seed(perm_seed) call
+        if hasattr(self._key_string, 'set_rng'):
+            self._key_string.set_rng(self._rng)
+        else:
+            # Fallback if the buffer only supports seeds
+            if perm_seed is not None:
+                self._key_string.set_seed(perm_seed)
+
+        # 4. Initialize state variables
         self._bits_exposed = 0
         self._net_bits_exposed = 0
         self._setter_locked = False
         self._pass_number = 0
 
-        # Instance variables initialized in first_pass
         self._syndrome_length = None
         self._block_size = None
         self._num_of_blocks = None
         self._parity_check_matrix = None
-        self._block_size_schedule = [4, 4, 0, 0, 0, 0, 0, 0]
+        self._block_size_schedule = block_schedule
 
     # def first_pass(self, permute_bits: bool = False) -> int:
     #     """
@@ -100,7 +117,8 @@ class Winnow:
         self._pass_number += 1
 
         if permute_bits:
-            self._key_string.set_seed(self.get_seed_value() + self._pass_number)
+            # self._key_string.set_seed(self.get_seed_value() + self._pass_number)
+            # self._key_string.permute_buffer()
             self._key_string.permute_buffer()
 
         return 0
