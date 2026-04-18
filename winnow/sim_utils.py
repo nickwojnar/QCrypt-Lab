@@ -48,31 +48,51 @@ class MockBitBuffer:
     #         self.bits = [self.bits[i] for i in inverse]
     #     self._permutation_history = []  # clear history after inverting
 
+    # def unpermute_all(self):
+    #     """Invert all permutations in reverse order, handling discarded bits."""
+    #     for indices in reversed(self._permutation_history):
+    #         # 1. Create a mask of which indices are actually present in the current bits
+    #         # Since we always discard from the end of the logical buffer or 
+    #         # specific positions, the length of self.bits tells us how many 
+    #         # 'original' slots are still filled.
+            
+    #         current_len = len(self.bits)
+            
+    #         # 2. We only care about the mapping for the bits we still have.
+    #         # We take the first 'current_len' indices from the shuffle map.
+    #         # This works because Winnow's discard logic effectively 'slides' 
+    #         # the remaining bits to the front of the buffer.
+    #         relevant_indices = indices[:current_len]
+            
+    #         # 3. Invert only the relevant mapping
+    #         inverse = np.argsort(relevant_indices)
+            
+    #         # 4. Reorder
+    #         self.bits = [self.bits[i] for i in inverse]
+            
+    #     self._permutation_history = []  # Clear history after inverting
+
     def unpermute_all(self):
-        """Invert all permutations in reverse order, handling discarded bits."""
+        """Invert permutations while respecting that bits were discarded."""
+        # We must go backwards through the shuffles
         for indices in reversed(self._permutation_history):
-            # 1. Create a mask of which indices are actually present in the current bits
-            # Since we always discard from the end of the logical buffer or 
-            # specific positions, the length of self.bits tells us how many 
-            # 'original' slots are still filled.
+            # The key is currently length L. 
+            # The shuffle map 'indices' was created for length N (where N > L).
+            # We need to find where the REMAING bits go.
             
             current_len = len(self.bits)
             
-            # 2. We only care about the mapping for the bits we still have.
-            # We take the first 'current_len' indices from the shuffle map.
-            # This works because Winnow's discard logic effectively 'slides' 
-            # the remaining bits to the front of the buffer.
-            relevant_indices = indices[:current_len]
+            # We only take the part of the shuffle map that corresponds 
+            # to the bits we didn't discard.
+            active_map = indices[:current_len]
             
-            # 3. Invert only the relevant mapping
-            inverse = np.argsort(relevant_indices)
+            # Invert the mapping
+            inverse = np.argsort(active_map)
             
-            # 4. Reorder
+            # Reorder
             self.bits = [self.bits[i] for i in inverse]
             
-        self._permutation_history = []  # Clear history after inverting
-
-        
+        self._permutation_history = []
     def discard_parity_bits(self, block_size: int, num_blocks: int):
         """Remove the last bit from each block after a Winnow pass."""
         kept = []
