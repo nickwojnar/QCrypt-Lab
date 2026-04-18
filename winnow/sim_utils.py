@@ -82,6 +82,7 @@ class MockBitBuffer:
             block_end   = block_start + block_size - 1  # exclude last bit
             kept.extend(self.bits[block_start:block_end])
         self.bits = kept
+
     def set_length(self, new_length):
         """Truncates the bit list to the specified length."""
         self.bits = self.bits[:new_length]

@@ -1,7 +1,7 @@
 import numpy as np
 
 class Winnow:
-    def __init__(self, raw_key=None, perm_seed: int = None, rng=None, block_schedule=[8, 8, 16, 32]):
+    def __init__(self, raw_key=None, perm_seed: int = None, rng=None, block_schedule=[4, 4, 0,0,0,0,0]):
         """
         Initializes the Winnow class.
         """
