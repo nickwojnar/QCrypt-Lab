@@ -69,11 +69,23 @@ class MockBitBuffer:
     def unpermute_all(self):
         """Invert all permutations in reverse order."""
         for indices in reversed(self._permutation_history):
-            inverse = np.argsort(indices)
+            # The key is currently length L. 
+            # The shuffle map 'indices' was created for length N (where N > L).
+            # We need to find where the REMAING bits go.
+            
+            current_len = len(self.bits)
+            
+            # We only take the part of the shuffle map that corresponds 
+            # to the bits we didn't discard.
+            active_map = indices[:current_len]
+            
+            # Invert the mapping
+            inverse = np.argsort(active_map)
+            
+            # Reorder
             self.bits = [self.bits[i] for i in inverse]
-        self._permutation_history = []  # clear history after inverting
-
-        
+            
+        self._permutation_history = []
     def discard_parity_bits(self, block_size: int, num_blocks: int):
         """Remove the last bit from each block after a Winnow pass."""
         kept = []
