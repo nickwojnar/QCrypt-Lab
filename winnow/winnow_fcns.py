@@ -1,7 +1,7 @@
 import numpy as np
 
 class Winnow:
-    def __init__(self, raw_key=None, perm_seed: int = None, rng=None, block_schedule=[4, 4, 0,0,0,0,0]):
+    def __init__(self, raw_key=None, perm_seed: int = None, rng=None, block_size_schedule=[16, 8, 4,0,0,0,0]):
         """
         Initializes the Winnow class.
         """
@@ -42,7 +42,8 @@ class Winnow:
         self._block_size = None
         self._num_of_blocks = None
         self._parity_check_matrix = None
-        self._block_size_schedule = block_schedule
+        self._block_size_schedule = block_size_schedule
+        self._total_num_passes = len(block_size_schedule)
 
     # def first_pass(self, permute_bits: bool = False) -> int:
     #     """
@@ -71,17 +72,20 @@ class Winnow:
 
     #     return 0
     def first_pass(self, permute_bits: bool = False) -> int:
-        # Reduce block size to 4 (syndrome length 2) 
-        # This handles high noise much better than block size 8
-        self._syndrome_length = 2 
-        self._block_size = 4
+
+        
+        self._block_size = self._block_size_schedule[0]
+        self._syndrome_length = int(np.ceil(np.log2(self._block_size + 1)))
+        
         
         self._num_of_blocks = self._key_string.get_length() // self._block_size
         self.create_matrix()
 
         if permute_bits:
             self._key_string.permute_buffer()
+
         self._pass_number += 1
+        # self._block_size_schedule[0] = 0
         return 0
     def next_pass(self, permute_bits: bool = False) -> int:
         """
@@ -102,24 +106,39 @@ class Winnow:
         #         self._block_size = 1 << self._syndrome_length
         #         self._block_size_schedule[i] -= 1
         #         break
-        for i in range(8):
-            if self._block_size_schedule[i] > 0:
-                self._syndrome_length = i + 3
-                self._block_size = 1 << self._syndrome_length
-                self._block_size_schedule[i] -= 1
-                break
-            elif i >= 7:
-                print("Time to terminate.")
-                return -1
+        # for i in range(self._total_num_passes):
+
+        if self._pass_number >= len(self._block_size_schedule) or self._pass_number >= self._total_num_passes:
+            print("Time to terminate: End of schedule/total passes.")
+            return -1
+
+        # 2. Extract size and check for termination signal (0)
+        new_size = self._block_size_schedule[self._pass_number]
+        if new_size <= 0:
+            print("Time to terminate: Found 0 in schedule.")
+            return -1
+
+
+
+            # self._syndrome_length = i + 3
+        self._block_size = self._block_size_schedule[self._pass_number]
+        self._syndrome_length = int(np.log2(self._block_size + 1))
+
+            # elif i >= 7:
+                # print("Time to terminate.")
+                # return -1
 
         self._num_of_blocks = self._key_string.get_length() // self._block_size
         self.create_matrix()
-        self._pass_number += 1
+        
 
         if permute_bits:
             # self._key_string.set_seed(self.get_seed_value() + self._pass_number)
             # self._key_string.permute_buffer()
             self._key_string.permute_buffer()
+        
+        self._pass_number += 1
+        # self._block_size_schedule[self._pass_number] = 0
 
         return 0
         # for i in range(8):
@@ -181,15 +200,14 @@ class Winnow:
         Returns:
             List of 8 block size schedule values
         """
-        result = [self._block_size_schedule[0] + 1]
-        result += self._block_size_schedule[1:8]
-        return result
+        return self._block_size_schedule
 
     def set_block_size_schedule(self, schedule: list[int]) -> None:
         """
         Adds block size schedule inputted by user
         
         """
+        self._total_num_passes = len(schedule)
         self._block_size_schedule = schedule
 
     def set_seed_value(self, seed: int) -> None:
@@ -238,7 +256,8 @@ class Winnow:
         Returns the number of passes left according to the block schedule.
         Responsible for determining termination of the algorithm.
         """
-        return sum(self._block_size_schedule[:8])
+        print(f"The number of remaining passes is {self._total_num_passes - self._pass_number}")
+        return self._total_num_passes - self._pass_number
     
     #-----------------------------------------------------------------------------------------------------------
     #--------------------------------------------syndrome fcns----------------------------------------------------
